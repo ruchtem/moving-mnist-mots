@@ -1,0 +1,26 @@
+# Random seed
+seed: 1
+
+# Shape we want for our moving images [width, height]
+shape: [64, 64]
+
+# Number of frames in a particular movement/animation/gif
+num_frames: 30
+
+# Number of movement/animations/gifs/sequences to generate
+num_sequences: 1
+
+# Real size of the images (eg: MNIST is 28x28)
+original_size: 28
+
+# Digits per movement/animation/gif.
+nums_per_image: 3
+
+# Boolean, used to decide if downloading/generating train set or test set
+training: True
+
+# Where to store the output
+dest: "./out"
+
+#filetype: "npz"
+filetype: "jpg"
