@@ -1,6 +1,7 @@
-# Created Images
+# Created data
 out/
 *.npz
+*.json
 
 # Loaded MNIST data
 *.gz

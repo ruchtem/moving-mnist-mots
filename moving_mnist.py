@@ -1,10 +1,13 @@
 import math
 import os
 import sys
+import json
 
 import numpy as np
+import pycocotools.mask as cocotools
 from sacred import Experiment
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageMath
+
 
 
 ###########################################################################################
@@ -86,7 +89,13 @@ def load_dataset(training=True):
     return load_mnist_images('t10k-images-idx3-ubyte.gz')
 
 @ex.capture
-def generate_moving_mnist(training, shape=(64, 64), num_frames=30, num_sequences=100, original_size=28, nums_per_image=2):
+def generate_moving_mnist(training, shape=(64, 64),
+                          num_frames=30, 
+                          num_sequences=100, 
+                          original_size=28, 
+                          nums_per_image=2,
+                          brightness_band=(0, 1),
+                          seg_threshold=177.5):
     '''
 
     Args:
@@ -110,13 +119,18 @@ def generate_moving_mnist(training, shape=(64, 64), num_frames=30, num_sequences
     # Create a dataset of shape of num_frames * num_images x 1 x new_width x new_height
     # Eg : 3000000 x 1 x 64 x 64
     dataset = np.empty((num_frames * num_sequences, 1, width, height), dtype=np.uint8)
+    
+    # Store coco annotations
+    annotations = []
+
+    id = 0  # id for each annotation
 
     for img_idx in range(num_sequences):
         # Randomly generate direction, speed, velocity and brightness for all images
         direcs = np.pi * (np.random.rand(nums_per_image) * 2 - 1)
         speeds = np.random.randint(5, size=nums_per_image) + 2
         veloc = np.asarray([(speed * math.cos(direc), speed * math.sin(direc)) for direc, speed in zip(direcs, speeds)])
-        brights = np.random.uniform(low=.2, high=1, size=nums_per_image)
+        brights = np.random.uniform(low=brightness_band[0], high=brightness_band[1], size=nums_per_image)
 
         # Get a list containing two PIL images randomly sampled from the database
         mnist_images = []
@@ -130,18 +144,39 @@ def generate_moving_mnist(training, shape=(64, 64), num_frames=30, num_sequences
 
         # Generate new frames for the entire num_frames
         for frame_idx in range(num_frames):
+            image_id = img_idx * num_frames + frame_idx     # Id for coco annotations
 
             background = Image.new("L", (width, height))
-
-            canvases = [Image.new('L', (width, height)) for _ in range(nums_per_image)]
-            
+            masks = [Image.new("1", (width, height)) for _ in range(nums_per_image)]
 
             # In canv (i.e Image object) place the image at the respective positions
-            # Super impose both images on the canvas (i.e empty np array)
-            for i, canv in enumerate(canvases):
-                #canv.paste(mnist_images[i], )
+            for i in range(nums_per_image):
+                # Adjust image brightness first
                 img = ImageEnhance.Brightness(mnist_images[i]).enhance(brights[i])
+                
+                # As mask we take the original image, so we have foreground and background
                 background.paste(img, tuple(positions[i].astype(int)), mask=mnist_images[i])
+
+                # Save the ground truth mask
+                mask = mnist_images[i].point(lambda p: p > seg_threshold and 255)
+                masks[i].paste(mask, tuple(positions[i].astype(int)))
+                
+                # Correct overlay by foreground mask
+                for j in range(i):
+                    masks[j] = ImageMath.eval("a & ~b", a = masks[j], b=masks[i])
+            
+            # Now do the annotations
+            for i in range(nums_per_image):
+                id += 1
+                mask = cocotools.encode(np.asarray(masks[i]).astype(np.uint8).T)
+                mask["counts"] = mask["counts"].decode("utf-8")     # json is serializing it later
+                area = int(cocotools.area(mask))                    # same here
+                annotation = {"image_id": image_id,
+                              "id": id,
+                              "iscrowd": 0,
+                              "segmentation": mask,
+                              "area": area}
+                annotations.append(annotation)
 
             # Get the next position by adding velocity
             next_pos = positions + veloc
@@ -157,16 +192,15 @@ def generate_moving_mnist(training, shape=(64, 64), num_frames=30, num_sequences
             positions = positions + veloc
 
             # Add the canvas to the dataset array
-            dataset[img_idx * num_frames + frame_idx] = np.array(background).astype(np.uint8)
+            dataset[image_id] = np.asarray(background).astype(np.uint8).T
 
-    return dataset
+    return dataset, annotations
 
 @ex.automain
-@ex.capture
 def main(training, dest, filetype='npz', frame_size=64, num_frames=30, num_sequences=100, original_size=28,
          nums_per_image=2, seed=1):
     np.random.seed(seed)
-    dat = generate_moving_mnist(training, num_frames=num_frames, num_sequences=num_sequences, \
+    dat, annotations = generate_moving_mnist(training, num_frames=num_frames, num_sequences=num_sequences, \
                                 original_size=original_size, nums_per_image=nums_per_image)
     n = num_sequences * num_frames
     if filetype == 'npz':
@@ -175,6 +209,8 @@ def main(training, dest, filetype='npz', frame_size=64, num_frames=30, num_seque
         for i in range(dat.shape[0]):
             Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, '{}.jpg'.format(i)))
 
+    with open("annotations.json", "w") as f:
+        json.dump(annotations, f)
 
 # if __name__ == '__main__':
 #     import argparse
