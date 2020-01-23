@@ -1,26 +1,42 @@
-# Random seed
-seed: 1
+config:
+  # Random seed.
+  seed: 1
 
-# Shape we want for our moving images [width, height]
-shape: [64, 64]
+  # Shape we want for our moving images [width, height]
+  shape: [50, 60]
 
-# Number of frames in a particular movement/animation/gif
-num_frames: 30
+  # Number of frames in a particular movement/animation/gif
+  num_frames: 30
 
-# Number of movement/animations/gifs/sequences to generate
-num_sequences: 1
+  # Number of movement/animations/gifs/sequences to generate
+  num_sequences: 2
 
-# Real size of the images (eg: MNIST is 28x28)
-original_size: 28
+  # Real size of the images (eg: MNIST is 28x28)
+  original_size: 28
 
-# Digits per movement/animation/gif.
-nums_per_image: 3
+  # Digits per movement/animation/gif/sequence.
+  digits_per_image: 3
 
-# Boolean, used to decide if downloading/generating train set or test set
-training: True
+  # Boolean, used to decide if downloading/generating train set or test set
+  training: True
 
-# Where to store the output
-dest: "./out"
+  # Where to store the output
+  dest: "./out"
 
-#filetype: "npz"
-filetype: "jpg"
+  # Filetype for the generated data: "npz" or "jpg"
+  filetype: "jpg"
+
+  # Label type to produce: "coco" or "mots"
+  # Use "coco" to train a detector (e.g. Mask R-CNN) like they were still images (it is still a sequence but each image is treaded independently)
+  # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
+  labeltype: "coco"
+
+  # Highest and lowest bound for the random brightness of each digit
+  brightness_band: [0.2, 1]
+
+  # Delta brightness change. This controls how fast the brightness changes from frame to frame.
+  # Should be in [0, 1], 0 for no change, 1 for a rapid change
+  brightness_change: 0.1
+
+  # Threshold for creating segmentation mask out of the original digit image
+  seg_threshold: 124
