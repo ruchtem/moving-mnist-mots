@@ -2,11 +2,13 @@ import math
 import os
 import sys
 import json
+import datetime
 
 import numpy as np
 import pycocotools.mask as cocotools
 from sacred import Experiment
 from PIL import Image, ImageEnhance, ImageMath
+from itertools import groupby
 
 
 
@@ -84,9 +86,16 @@ def load_dataset(training=True):
         data = data.reshape(-1, 1, 28, 28).transpose(0, 1, 3, 2)
         return data / np.float32(255)
 
+    def load_mnist_lables(filename):
+        if not os.path.exists(filename):
+            download(filename)
+        with gzip.open(filename, 'rb') as f:
+            data = np.frombuffer(f.read(), np.uint8, offset=8).astype(np.int64)
+        return data
+
     if training:
-        return load_mnist_images('train-images-idx3-ubyte.gz')
-    return load_mnist_images('t10k-images-idx3-ubyte.gz')
+        return load_mnist_images('train-images-idx3-ubyte.gz'), load_mnist_lables("train-labels-idx1-ubyte.gz")
+    return load_mnist_images('t10k-images-idx3-ubyte.gz'), load_mnist_lables("t10k-labels-idx1-ubyte.gz")
 
 
 def adjust_size(img, size, increase, config):
@@ -99,9 +108,57 @@ def adjust_size(img, size, increase, config):
     # Now change the size
     size = size * config["original_size"]
     delta = size * config["size_change"]
-    new_size = int(np.round(size + delta if increase else size - delta, decimals=0))
-    img = img.resize((new_size, new_size), Image.BICUBIC)
+    new_size = size + delta if increase else size - delta
+    img = img.resize((int(np.round(new_size, decimals=0)), int(np.round(new_size, decimals=0))), Image.BICUBIC)
     return img, new_size / config["original_size"], increase
+
+
+def get_poly(mask):
+    # See https://github.com/cocodataset/cocoapi/issues/131
+    from skimage import measure
+    contours = measure.find_contours(mask, 0.5)
+
+    segmentations = []
+    for contour in contours:
+        contour = np.flip(contour, axis=1)
+        segmentation = contour.ravel().tolist()
+        segmentations.append(segmentation)
+    return segmentations
+
+
+def create_coco_ann_record(id, image_id, mask, category):
+    """Creates a dict record for a coco annotation"""
+    mask_compressed = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
+    mask = get_poly(np.asarray(mask))   # It seems coco is not using its own RLE format but the polygon (see instances_val2017.json)
+    return {"image_id": image_id,
+            "id": id,
+            "iscrowd": 0,
+            "segmentation": mask,
+            "area": int(cocotools.area(mask_compressed)),          # json is expecting native datatypes
+            "bbox": list(cocotools.toBbox(mask_compressed)),
+            "category_id": int(category)}
+
+
+def create_coco_img_record(image_id, size):
+    return {"license": 1,
+            "file_name": "%s.jpg" % image_id,
+            "height": size[1],
+            "width": size[0],
+            "date_captured": datetime.datetime.now().strftime('%d-%m-%Y '),
+            "id": image_id}
+
+def create_coco_cat_record():
+    return [
+        {"supercategory": "digit", "id": 0, "name": "0"},
+        {"supercategory": "digit", "id": 1, "name": "1"},
+        {"supercategory": "digit", "id": 2, "name": "2"},
+        {"supercategory": "digit", "id": 3, "name": "3"},
+        {"supercategory": "digit", "id": 4, "name": "4"},
+        {"supercategory": "digit", "id": 5, "name": "5"},
+        {"supercategory": "digit", "id": 6, "name": "6"},
+        {"supercategory": "digit", "id": 7, "name": "7"},
+        {"supercategory": "digit", "id": 8, "name": "8"},
+        {"supercategory": "digit", "id": 9, "name": "9"}]
 
 
 def generate_moving_mnist(config):
@@ -111,7 +168,7 @@ def generate_moving_mnist(config):
         Dataset of np.uint8 type with dimensions num_frames * num_images x 1 x new_width x new_height
 
     '''
-    mnist = load_dataset(config["training"])
+    mnist, labels = load_dataset(config["training"])
     width, height = config["shape"]
     original_size = config["original_size"]
     num_frames = config["num_frames"]
@@ -119,7 +176,6 @@ def generate_moving_mnist(config):
     digits_per_image = config["digits_per_image"]
     brightness_band = config["brightness_band"]
     size_band = config["size_band"]
-
 
     # Get how many pixels can we move around a single image
     lims = (x_lim, y_lim) = width - original_size, height - original_size
@@ -130,11 +186,12 @@ def generate_moving_mnist(config):
     
     # Store coco annotations
     annotations = []
+    images_ann = []
 
     id = 0  # id for each annotation
 
     for img_idx in range(num_sequences):
-        # Randomly generate direction, speed, velocity and brightness for all images
+        # Randomly generate direction, speed, velocity, brightness, and size for all images
         direcs = np.pi * (np.random.rand(digits_per_image) * 2 - 1)
         speeds = np.random.randint(5, size=digits_per_image) + 2
         veloc = np.asarray([(speed * math.cos(direc), speed * math.sin(direc)) for direc, speed in zip(direcs, speeds)])
@@ -143,14 +200,17 @@ def generate_moving_mnist(config):
         brightness_increases = np.random.choice([True, False], size=digits_per_image)   # True for increase brightness
         size_increases = np.random.choice([True, False], size=digits_per_image)
 
-        # Get a list containing two PIL images randomly sampled from the database
+        # Get a list containing n PIL images randomly sampled from the database
         mnist_images = []
+        categories = []
         for i, r in enumerate(np.random.randint(0, mnist.shape[0], digits_per_image)):
             img = Image.fromarray(get_image_from_array(mnist, r, mean=0))
             img = img.resize((original_size, original_size), Image.BICUBIC)
             mnist_images.append(img)
+            
+            categories.append(labels[r])
         
-        # Generate tuples of (x,y) i.e initial positions for nums_per_image (default : 2)
+        # Generate tuples of (x,y) i.e initial positions for digits_per_image
         positions = np.asarray([(np.random.rand() * x_lim, np.random.rand() * y_lim) for _ in range(digits_per_image)])
 
         # Generate new frames for the entire num_frames
@@ -163,14 +223,12 @@ def generate_moving_mnist(config):
             # In canv (i.e Image object) place the image at the respective positions
             for i in range(digits_per_image):
                 # Adjust size
-                img, new_size, increases = adjust_size(mnist_images[i], sizes[i], size_increases[i], config)
-                sizes[i] = new_size
-                size_increases[i] = increases
+                img, sizes[i], size_increases[i] = adjust_size(mnist_images[i], sizes[i], size_increases[i], config)
 
-                # Adjust image brightness first
+                # Adjust image brightness
                 img_bright = ImageEnhance.Brightness(img).enhance(brights[i])
 
-                # As mask we take the original image, so we have foreground and background
+                # To override background and other digits, set mask = original image
                 background.paste(img_bright, tuple(positions[i].astype(int)), mask=img)
 
                 # Save the ground truth mask
@@ -184,15 +242,9 @@ def generate_moving_mnist(config):
             # Now do the annotations
             for i in range(digits_per_image):
                 id += 1
-                mask = cocotools.encode(np.asarray(masks[i]).astype(np.uint8).T)
-                mask["counts"] = mask["counts"].decode("utf-8")     # json is serializing it later
-                area = int(cocotools.area(mask))                    # same here
-                annotation = {"image_id": image_id,
-                              "id": id,
-                              "iscrowd": 0,
-                              "segmentation": mask,
-                              "area": area}
-                annotations.append(annotation)
+                annotations.append(create_coco_ann_record(id, image_id, masks[i], categories[i]))
+
+            images_ann.append(create_coco_img_record(image_id, config["shape"]))
 
             # Get the next position by adding velocity
             next_pos = positions + veloc
@@ -223,12 +275,12 @@ def generate_moving_mnist(config):
             # Add the canvas to the dataset array
             dataset[image_id] = np.asarray(background).astype(np.uint8).T
 
-    return dataset, annotations
+    return dataset, annotations, images_ann
 
 @ex.automain
 def main(config):
     np.random.seed(config["seed"])
-    dat, annotations = generate_moving_mnist(config)
+    dat, annotations, images_ann = generate_moving_mnist(config)
     dest = config["dest"]
     if config["filetype"] == 'npz':
         np.savez(dest, dat)
@@ -237,4 +289,6 @@ def main(config):
             Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, '{}.jpg'.format(i)))
 
     with open("annotations.json", "w") as f:
-        json.dump(annotations, f)
+        json.dump({"images": images_ann, 
+                   "annotations": annotations,
+                   "categories": create_coco_cat_record()}, f)

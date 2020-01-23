@@ -3,7 +3,7 @@ config:
   seed: 1
 
   # Shape we want for our moving images [width, height]
-  shape: [50, 60]
+  shape: [60, 50]
 
   # Number of frames in a particular movement/animation/gif
   num_frames: 30
