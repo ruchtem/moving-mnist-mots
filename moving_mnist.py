@@ -89,6 +89,21 @@ def load_dataset(training=True):
     return load_mnist_images('t10k-images-idx3-ubyte.gz')
 
 
+def adjust_size(img, size, increase, config):
+    # Check if we hit the size boundaries
+    if increase and size >= config["size_band"][1]:
+        increase = False
+    elif not increase and size <= config["size_band"][0]:
+        increase = True
+
+    # Now change the size
+    size = size * config["original_size"]
+    delta = size * config["size_change"]
+    new_size = int(np.round(size + delta if increase else size - delta, decimals=0))
+    img = img.resize((new_size, new_size), Image.BICUBIC)
+    return img, new_size / config["original_size"], increase
+
+
 def generate_moving_mnist(config):
     '''
 
@@ -103,6 +118,8 @@ def generate_moving_mnist(config):
     num_sequences = config["num_sequences"]
     digits_per_image = config["digits_per_image"]
     brightness_band = config["brightness_band"]
+    size_band = config["size_band"]
+
 
     # Get how many pixels can we move around a single image
     lims = (x_lim, y_lim) = width - original_size, height - original_size
@@ -122,13 +139,15 @@ def generate_moving_mnist(config):
         speeds = np.random.randint(5, size=digits_per_image) + 2
         veloc = np.asarray([(speed * math.cos(direc), speed * math.sin(direc)) for direc, speed in zip(direcs, speeds)])
         brights = np.random.uniform(low=brightness_band[0], high=brightness_band[1], size=digits_per_image)
+        sizes = np.random.uniform(low=size_band[0], high=size_band[1], size=digits_per_image)
         brightness_increases = np.random.choice([True, False], size=digits_per_image)   # True for increase brightness
+        size_increases = np.random.choice([True, False], size=digits_per_image)
 
         # Get a list containing two PIL images randomly sampled from the database
         mnist_images = []
         for i, r in enumerate(np.random.randint(0, mnist.shape[0], digits_per_image)):
             img = Image.fromarray(get_image_from_array(mnist, r, mean=0))
-            img = img.resize((original_size, original_size), Image.ANTIALIAS)
+            img = img.resize((original_size, original_size), Image.BICUBIC)
             mnist_images.append(img)
         
         # Generate tuples of (x,y) i.e initial positions for nums_per_image (default : 2)
@@ -143,14 +162,19 @@ def generate_moving_mnist(config):
 
             # In canv (i.e Image object) place the image at the respective positions
             for i in range(digits_per_image):
+                # Adjust size
+                img, new_size, increases = adjust_size(mnist_images[i], sizes[i], size_increases[i], config)
+                sizes[i] = new_size
+                size_increases[i] = increases
+
                 # Adjust image brightness first
-                img = ImageEnhance.Brightness(mnist_images[i]).enhance(brights[i])
-                
+                img_bright = ImageEnhance.Brightness(img).enhance(brights[i])
+
                 # As mask we take the original image, so we have foreground and background
-                background.paste(img, tuple(positions[i].astype(int)), mask=mnist_images[i])
+                background.paste(img_bright, tuple(positions[i].astype(int)), mask=img)
 
                 # Save the ground truth mask
-                mask = mnist_images[i].point(lambda p: p > config["seg_threshold"] and 255)
+                mask = img.point(lambda p: p > config["seg_threshold"] and 255)
                 masks[i].paste(mask, tuple(positions[i].astype(int)))
                 
                 # Correct overlay by foreground mask

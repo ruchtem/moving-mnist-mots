@@ -17,9 +17,10 @@ It is tailored towards the Multi-Object Tracking and Segmentation (MOTS) task in
 
 This includes the following modifications:
 
-- (done) Numbers have a fixed order with regard to foreground to background
-- (todo) Numbers change their size while moving
-- (done) Numbers change their appearance while moving
+- Numbers have a fixed order with regard to foreground to background
+- Numbers change their size while moving
+- Numbers change their appearance while moving
+- (todo) Numbers can disappear in a sequence and new numbers can enter
 
 The generated data can be exported in COCO format or MOTS format.
 

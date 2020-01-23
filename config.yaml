@@ -31,12 +31,18 @@ config:
   # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
   labeltype: "coco"
 
+  # Controls how much the size of a digit can change. <1 the percentage it can be smaller, >1 for bigger. 1 for the original size
+  size_band: [0.7, 1.3]
+
+  # Controls how fast the size changes. Should be [0, 1]. 0 for no change 1 for rapid change.
+  size_change: 0.05
+
   # Highest and lowest bound for the random brightness of each digit
   brightness_band: [0.2, 1]
 
   # Delta brightness change. This controls how fast the brightness changes from frame to frame.
   # Should be in [0, 1], 0 for no change, 1 for a rapid change
-  brightness_change: 0.1
+  brightness_change: 0.05
 
   # Threshold for creating segmentation mask out of the original digit image
   seg_threshold: 124
