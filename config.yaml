@@ -9,13 +9,13 @@ config:
   num_frames: 30
 
   # Number of movement/animations/gifs/sequences to generate
-  num_sequences: 2
+  num_sequences: 100
 
   # Real size of the images (eg: MNIST is 28x28)
   original_size: 28
 
   # Digits per movement/animation/gif/sequence.
-  digits_per_image: 3
+  digits_per_image: 2
 
   # Boolean, used to decide if downloading/generating train set or test set
   training: True
@@ -26,10 +26,18 @@ config:
   # Filetype for the generated data: "npz" or "jpg"
   filetype: "jpg"
 
-  # Label type to produce: "coco" or "mots"
-  # Use "coco" to train a detector (e.g. Mask R-CNN) like they were still images (it is still a sequence but each image is treaded independently)
-  # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
-  labeltype: "coco"
+  labels:
+    # Label type to produce: "coco" or "mots"
+    # Use "coco" to train a detector (e.g. Mask R-CNN) like they were still images (it is still a sequence but each image is treaded independently)
+    # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
+    labeltype: "coco"
+
+    # Only relevant if labeltype == "coco".
+    # Some detectors expect masks encoded as polygons (e.g. detectron2).
+    # Others can work with RLE masks (specification see here: https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/mask.py)
+    # The formats are mixed in the original coco dataset.
+    # Can be "polygon" or "rle"
+    masktype: "rle"
 
   # Controls how much the size of a digit can change. <1 the percentage it can be smaller, >1 for bigger. 1 for the original size
   size_band: [0.7, 1.3]

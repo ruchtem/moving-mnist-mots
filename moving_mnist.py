@@ -113,28 +113,37 @@ def adjust_size(img, size, increase, config):
     return img, new_size / config["original_size"], increase
 
 
-def get_poly(mask):
-    # See https://github.com/cocodataset/cocoapi/issues/131
+def mask_to_poly(mask):
+    """It seems coco is not using its own RLE format but the polygon (see instances_val2017.json)
+    See also https://github.com/cocodataset/cocoapi/issues/131
+    """
     from skimage import measure
     contours = measure.find_contours(mask, 0.5)
 
-    segmentations = []
-    for contour in contours:
-        contour = np.flip(contour, axis=1)
-        segmentation = contour.ravel().tolist()
-        segmentations.append(segmentation)
-    return segmentations
+    segs = []
+    for c in contours:
+        c = np.flip(c, axis=1)
+        segmentation = c.ravel().tolist()
+        segs.append(segmentation)
+    return segs
 
 
-def create_coco_ann_record(id, image_id, mask, category):
+def create_coco_ann_record(id, image_id, mask, category, masktype):
     """Creates a dict record for a coco annotation"""
     mask_compressed = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
-    mask = get_poly(np.asarray(mask))   # It seems coco is not using its own RLE format but the polygon (see instances_val2017.json)
+    if masktype == "rle":
+        mask = mask_compressed
+        mask["counts"] = mask["counts"].decode("utf-8")             # json expects decoded data
+    elif masktype == "polygon":
+        mask = mask_to_poly(np.asarray(mask))
+    else:
+        raise ValueError("Unknown mask format: '%s'. Choose either 'rle' or 'polygon'." % masktype)
+    
     return {"image_id": image_id,
             "id": id,
             "iscrowd": 0,
             "segmentation": mask,
-            "area": int(cocotools.area(mask_compressed)),          # json is expecting native datatypes
+            "area": int(cocotools.area(mask_compressed)),           # json is expecting native datatypes
             "bbox": list(cocotools.toBbox(mask_compressed)),
             "category_id": int(category)}
 
@@ -185,8 +194,13 @@ def generate_moving_mnist(config):
     dataset = np.empty((num_frames * num_sequences, 1, width, height), dtype=np.uint8)
     
     # Store coco annotations
-    annotations = []
-    images_ann = []
+    if config["labels"]["labeltype"] == "coco":
+        annotations = []
+        images_ann = []
+    elif config["labels"]["labeltype"] == "mots":
+        raise NotImplementedError()
+    else:
+        raise ValueError("Unknown labeltype '%s'. Choose either 'coco' or 'mots'." % config["labels"]["labeltype"])
 
     id = 0  # id for each annotation
 
@@ -242,7 +256,7 @@ def generate_moving_mnist(config):
             # Now do the annotations
             for i in range(digits_per_image):
                 id += 1
-                annotations.append(create_coco_ann_record(id, image_id, masks[i], categories[i]))
+                annotations.append(create_coco_ann_record(id, image_id, masks[i], categories[i], config["labels"]["masktype"]))
 
             images_ann.append(create_coco_img_record(image_id, config["shape"]))
 
