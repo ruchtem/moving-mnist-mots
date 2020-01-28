@@ -32,6 +32,7 @@ The configuration is controlled by `sacred`. For options see [config.yaml](confi
 # Generate data
 
 ```
+mkdir out
 python3 moving_mnist.py
 ```
 

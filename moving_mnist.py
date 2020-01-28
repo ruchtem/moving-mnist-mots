@@ -9,6 +9,7 @@ import pycocotools.mask as cocotools
 from sacred import Experiment
 from PIL import Image, ImageEnhance, ImageMath
 from itertools import groupby
+from pathlib import Path
 
 
 
@@ -296,6 +297,10 @@ def main(config):
     np.random.seed(config["seed"])
     dat, annotations, images_ann = generate_moving_mnist(config)
     dest = config["dest"]
+
+    for f in Path(dest).iterdir():
+        os.remove(f)
+
     if config["filetype"] == 'npz':
         np.savez(dest, dat)
     elif config["filetype"] == 'jpg':
