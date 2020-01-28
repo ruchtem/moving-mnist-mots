@@ -22,6 +22,7 @@ The generated data can be exported in COCO format [3] or MOTS format [2].
 python3 -m venv path/to/venvs/moving-mnist-mots         # Create a virtual environment
 source path/to/venvs/moving-mnist-mots/bin/activate     # Activate the virtual environment
 pip install -r requirements.txt
+pip install pycocotools
 ```
 
 # Configuration
