@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import datetime
+import shutil
 
 import numpy as np
 import pycocotools.mask as cocotools
@@ -129,6 +130,15 @@ def mask_to_poly(mask):
     return segs
 
 
+def create_ann_record(id, image_id, mask, category, masktype, track_id, config):
+    if config["labels"]["labeltype"] == "coco":
+        return create_coco_ann_record(id, image_id, mask, category, masktype)
+    elif config["labels"]["labeltype"] == "mots":
+        return create_mots_ann_record(image_id, track_id, mask, category)
+    else:
+        raise ValueError()
+
+
 def create_coco_ann_record(id, image_id, mask, category, masktype):
     """Creates a dict record for a coco annotation"""
     mask_compressed = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
@@ -149,6 +159,11 @@ def create_coco_ann_record(id, image_id, mask, category, masktype):
             "category_id": int(category)}
 
 
+def create_mots_ann_record(image_id, track_id, mask, category):
+    mask = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
+    return [image_id, track_id, category, mask["size"][0], mask["size"][1], mask["counts"].decode("utf-8")]
+
+
 def create_coco_img_record(image_id, size):
     return {"license": 1,
             "file_name": "%s.jpg" % image_id,
@@ -156,6 +171,7 @@ def create_coco_img_record(image_id, size):
             "width": size[0],
             "date_captured": datetime.datetime.now().strftime('%d-%m-%Y '),
             "id": image_id}
+
 
 def create_coco_cat_record():
     return [
@@ -178,7 +194,7 @@ def generate_moving_mnist(config):
         Dataset of np.uint8 type with dimensions num_frames * num_images x 1 x new_width x new_height
 
     '''
-    mnist, labels = load_dataset(config["training"])
+    mnist, mnist_categories = load_dataset(config["training"])
     width, height = config["shape"]
     original_size = config["original_size"]
     num_frames = config["num_frames"]
@@ -194,18 +210,21 @@ def generate_moving_mnist(config):
     # Eg : 3000000 x 1 x 64 x 64
     dataset = np.empty((num_frames * num_sequences, 1, width, height), dtype=np.uint8)
     
-    # Store coco annotations
+    # Store annotations
+    labels = {}
     if config["labels"]["labeltype"] == "coco":
-        annotations = []
-        images_ann = []
+        labels["annotations"] = []
+        labels["images"] = []
     elif config["labels"]["labeltype"] == "mots":
-        raise NotImplementedError()
+        labels["annotations"] = {}
     else:
         raise ValueError("Unknown labeltype '%s'. Choose either 'coco' or 'mots'." % config["labels"]["labeltype"])
 
-    id = 0  # id for each annotation
+    id = 0              # id for each annotation (required by coco)
 
-    for img_idx in range(num_sequences):
+    for sequence_idx in range(num_sequences):
+        if config["labels"]["labeltype"] == "mots":
+            labels["annotations"][sequence_idx] = []
         # Randomly generate direction, speed, velocity, brightness, and size for all images
         direcs = np.pi * (np.random.rand(digits_per_image) * 2 - 1)
         speeds = np.random.randint(5, size=digits_per_image) + 2
@@ -223,14 +242,14 @@ def generate_moving_mnist(config):
             img = img.resize((original_size, original_size), Image.BICUBIC)
             mnist_images.append(img)
             
-            categories.append(labels[r])
+            categories.append(mnist_categories[r])
         
         # Generate tuples of (x,y) i.e initial positions for digits_per_image
         positions = np.asarray([(np.random.rand() * x_lim, np.random.rand() * y_lim) for _ in range(digits_per_image)])
 
         # Generate new frames for the entire num_frames
         for frame_idx in range(num_frames):
-            image_id = img_idx * num_frames + frame_idx     # Id for coco annotations
+            image_id = sequence_idx * num_frames + frame_idx     # Id for coco annotations
 
             background = Image.new("L", (width, height))
             masks = [Image.new("1", (width, height)) for _ in range(digits_per_image)]
@@ -257,9 +276,14 @@ def generate_moving_mnist(config):
             # Now do the annotations
             for i in range(digits_per_image):
                 id += 1
-                annotations.append(create_coco_ann_record(id, image_id, masks[i], categories[i], config["labels"]["masktype"]))
+                track_id = i
+                if config["labels"]["labeltype"] == "coco":
+                    labels["annotations"].append(create_ann_record(id, frame_idx, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
+                else:
+                    labels["annotations"][sequence_idx].append(create_ann_record(id, frame_idx, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
 
-            images_ann.append(create_coco_img_record(image_id, config["shape"]))
+            if config["labels"]["labeltype"] == "coco":
+                labels["images"].append(create_coco_img_record(image_id, config["shape"]))
 
             # Get the next position by adding velocity
             next_pos = positions + veloc
@@ -290,24 +314,43 @@ def generate_moving_mnist(config):
             # Add the canvas to the dataset array
             dataset[image_id] = np.asarray(background).astype(np.uint8).T
 
-    return dataset, annotations, images_ann
+    return dataset, labels
 
 @ex.automain
 def main(config):
     np.random.seed(config["seed"])
-    dat, annotations, images_ann = generate_moving_mnist(config)
+    dat, labels = generate_moving_mnist(config)
     dest = config["dest"]
 
     for f in Path(dest).iterdir():
-        os.remove(f)
-
+        if f.is_dir():
+            shutil.rmtree(f)
+        else:
+            os.remove(f)
+            
     if config["filetype"] == 'npz':
         np.savez(dest, dat)
     elif config["filetype"] == 'jpg':
-        for i in range(dat.shape[0]):
-            Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, '{}.jpg'.format(i)))
+        if config["labels"]["labeltype"] == "coco":
+            for i in range(dat.shape[0]):
+                Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, '{}.jpg'.format(i)))
+        else:
+            i = 0
+            for seq_idx in range(config["num_sequences"]):
+                dir_path = Path(dest + "/%04d" % seq_idx)
+                os.mkdir(dir_path)
+                for j in range(config["num_frames"]):
+                    Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dir_path, '{}.jpg'.format(j)))
+                    i += 1
 
-    with open("annotations.json", "w") as f:
-        json.dump({"images": images_ann, 
-                   "annotations": annotations,
-                   "categories": create_coco_cat_record()}, f)
+    if config["labels"]["labeltype"] == "coco":
+        with open("annotations.json", "w") as f:
+            json.dump({"images": labels["images"], 
+                    "annotations": labels["annotations"],
+                    "categories": create_coco_cat_record()}, f)
+    else:
+        for seq_id, data in labels["annotations"].items():
+            with open("%04d.txt" % seq_id, "w") as f:
+                for line in data:
+                    f.write(" ".join(str(x) for x in line) + "\n")
+
