@@ -327,30 +327,32 @@ def main(config):
             shutil.rmtree(f)
         else:
             os.remove(f)
-            
+    
+    os.mkdir(dest + "/images")
+
     if config["filetype"] == 'npz':
-        np.savez(dest, dat)
+        np.savez(dest + "/images/", dat)
     elif config["filetype"] == 'jpg':
         if config["labels"]["labeltype"] == "coco":
             for i in range(dat.shape[0]):
-                Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, '{}.jpg'.format(i)))
+                Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dest, 'images/{}.jpg'.format(i)))
         else:
             i = 0
             for seq_idx in range(config["num_sequences"]):
-                dir_path = Path(dest + "/%04d" % seq_idx)
+                dir_path = Path(dest + "/images/%04d" % seq_idx)
                 os.mkdir(dir_path)
                 for j in range(config["num_frames"]):
-                    Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dir_path, '{}.jpg'.format(j)))
+                    Image.fromarray(get_image_from_array(dat, i, mean=0, norm=False)).save(os.path.join(dir_path, '%06d.jpg' % j))
                     i += 1
 
     if config["labels"]["labeltype"] == "coco":
-        with open("annotations.json", "w") as f:
+        with open(dest + "/annotations.json", "w") as f:
             json.dump({"images": labels["images"], 
                     "annotations": labels["annotations"],
                     "categories": create_coco_cat_record()}, f)
     else:
         for seq_id, data in labels["annotations"].items():
-            with open("%04d.txt" % seq_id, "w") as f:
+            with open(dest + "/%04d.txt" % seq_id, "w") as f:
                 for line in data:
                     f.write(" ".join(str(x) for x in line) + "\n")
 

@@ -6,10 +6,10 @@ config:
   shape: [60, 50]
 
   # Number of frames in a particular movement/animation/gif
-  num_frames: 30
+  num_frames: 100
 
   # Number of movement/animations/gifs/sequences to generate
-  num_sequences: 100
+  num_sequences: 3
 
   # Real size of the images (eg: MNIST is 28x28)
   original_size: 28
@@ -30,7 +30,7 @@ config:
     # Label type to produce: "coco" or "mots"
     # Use "coco" to train a detector (e.g. Mask R-CNN) like they were still images (it is still a sequence but each image is treaded independently)
     # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
-    labeltype: "coco"
+    labeltype: "mots"
 
     # Only relevant if labeltype == "coco".
     # Some detectors expect masks encoded as polygons (e.g. detectron2).
@@ -53,4 +53,4 @@ config:
   brightness_change: 0.05
 
   # Threshold for creating segmentation mask out of the original digit image
-  seg_threshold: 124
+  seg_threshold: 50
