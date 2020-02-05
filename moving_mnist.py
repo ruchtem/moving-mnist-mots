@@ -278,9 +278,9 @@ def generate_moving_mnist(config):
                 id += 1
                 track_id = i
                 if config["labels"]["labeltype"] == "coco":
-                    labels["annotations"].append(create_ann_record(id, frame_idx, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
+                    labels["annotations"].append(create_ann_record(id, image_id, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
                 else:
-                    labels["annotations"][sequence_idx].append(create_ann_record(id, frame_idx, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
+                    labels["annotations"][sequence_idx].append(create_ann_record(id, image_id, masks[i], categories[i], config["labels"]["masktype"], track_id, config))
 
             if config["labels"]["labeltype"] == "coco":
                 labels["images"].append(create_coco_img_record(image_id, config["shape"]))
