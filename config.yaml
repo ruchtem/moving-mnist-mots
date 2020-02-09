@@ -6,16 +6,13 @@ config:
   shape: [60, 50]
 
   # Number of frames in a particular movement/animation/gif
-  num_frames: 1
+  num_frames: 20
 
   # Number of movement/animations/gifs/sequences to generate
-  num_sequences: 30
-
-  # Real size of the images (eg: MNIST is 28x28)
-  original_size: 28
+  num_sequences: 4
 
   # Digits per movement/animation/gif/sequence.
-  digits_per_image: 1
+  digits_per_image: 4
 
   # Boolean, used to decide if downloading/generating train set or test set
   training: True
@@ -23,7 +20,7 @@ config:
   # Where to store the output
   dest: "./out"
 
-  # Filetype for the generated data: "npz" or "jpg"
+  # Filetype for the generated image data: currently only "jpg"
   filetype: "jpg"
 
   labels:
@@ -39,10 +36,10 @@ config:
     # Can be "polygon" or "rle"
     masktype: "rle"
 
-  # Controls how much the size of a digit can change. <1 the percentage it can be smaller, >1 for bigger. 1 for the original size
+  # Controls how much the size of a digit can change. <1 for lower bound, >1 for upper bound. 1 for the original size
   size_band: [0.7, 1.3]
 
-  # Controls how fast the size changes. Should be [0, 1]. 0 for no change 1 for rapid change.
+  # Controls how fast the size changes. Should be [0, 1]. 0 for no change, 1 for rapid change.
   size_change: 0.05
 
   # Highest and lowest bound for the random brightness of each digit
@@ -52,5 +49,7 @@ config:
   # Should be in [0, 1], 0 for no change, 1 for a rapid change
   brightness_change: 0.05
 
-  # Threshold for creating segmentation mask out of the original digit image
+  # Threshold for creating segmentation mask out of the original digit image.
+  # The lower it is, the thicker the mask and the less gaps it has. This is a raw
+  # grayscale pixel value, so should be between in [0, 255].
   seg_threshold: 50
