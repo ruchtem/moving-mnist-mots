@@ -350,10 +350,10 @@ class Frame:
 
     def save_image(self, path):
         """
-        Saves the frame image under the given path.
+        Saves the frame image under the given path in the expected format.
         """
-        img_name = self.image_id if self.label_type == "coco" else self.index
-        self.image.save(os.path.join(path, "{}.jpg".format(img_name)))
+        img_name = "%s.jpg" % self.image_id if self.label_type == "coco" else "%06d.jpg" % self.index
+        self.image.save(os.path.join(path, img_name))
 
 
 class Sequence():
@@ -404,7 +404,7 @@ class Sequence():
 
 
 ex = Experiment("moving-mnist")
-ex.add_config("config2.yaml")
+ex.add_config("config.yaml")
 
 @ex.automain
 def main(config):
