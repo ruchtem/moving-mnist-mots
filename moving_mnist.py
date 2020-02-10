@@ -170,7 +170,7 @@ class Digit:
             elif self.mask_type == "polygon":
                 mask = mask_to_poly(np.asarray(mask))
             else:
-                raise ValueError("Unknown mask format: '%s'. Choose either 'rle' or 'polygon'." % masktype)
+                raise ValueError("Unknown mask format: '%s'. Choose either 'rle' or 'polygon'." % self.mask_type)
             
             return {"image_id": image_id,
                     "id": label_id,
@@ -404,12 +404,16 @@ class Sequence():
 
 
 ex = Experiment("moving-mnist")
-ex.add_config("config.yaml")
+ex.add_config("config2.yaml")
 
 @ex.automain
 def main(config):
     np.random.seed(config["seed"])
     clean_dir(config['dest'])
+
+    # Assumtion throughout the code that labeltye is mots if it isn't coco
+    assert config['labels']['labeltype'] in ["coco", "mots"], \
+            "Unknown labeltype: %s" % config['labels']['labeltype']
 
     # Create data
     sequences = []
@@ -421,9 +425,7 @@ def main(config):
         s.write_images()
 
     # Write labels
-    label_type = config['labels']['labeltype']
-    assert label_type in ["coco", "mots"], "Unknown labeltype: %s" % label_type
-    if label_type == "coco":
+    if config['labels']['labeltype'] == "coco":
         image_labels = []
         labels = []
         for s in sequences:
