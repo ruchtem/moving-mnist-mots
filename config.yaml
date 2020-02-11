@@ -6,16 +6,16 @@ config:
   shape: [60, 50]
 
   # Number of frames in a particular movement/animation/gif
-  num_frames: 1
+  num_frames: 10
 
   # Number of movement/animations/gifs/sequences to generate
-  num_sequences: 30
+  num_sequences: 20
 
   # Digits per movement/animation/gif/sequence.
-  digits_per_image: 1
+  digits_per_image: 4
 
   # Boolean, used to decide if downloading/generating train set or test set
-  training: True
+  training: False
 
   # Where to store the output
   dest: "./out"
@@ -27,7 +27,7 @@ config:
     # Label type to produce: "coco" or "mots"
     # Use "coco" to train a detector (e.g. Mask R-CNN) like they were still images (it is still a sequence but each image is treaded independently)
     # Use "mots" to train a whole segmentation and tracking pipeline (includes track ids)
-    labeltype: "coco"
+    labeltype: "mots"
 
     # Only relevant if labeltype == "coco".
     # Some detectors expect masks encoded as polygons (e.g. detectron2).

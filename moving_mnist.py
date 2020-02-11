@@ -5,6 +5,9 @@ import json
 import datetime
 import shutil
 import itertools
+import argparse
+import yaml
+import copy
 
 import numpy as np
 import pycocotools.mask as cocotools
@@ -154,7 +157,7 @@ class Digit:
         return world_mask
 
 
-    def create_label(self, mask, image_id):
+    def create_label(self, mask, image_id, frame_index=None):
         """ 
         Creates a label record for this digit for the current frame.
         """
@@ -182,7 +185,8 @@ class Digit:
 
         else:
             # MOTS label type
-            return [image_id, 
+            assert frame_index is not None, "Frame id required for mots label"
+            return [frame_index, 
                     self.track_id, 
                     self.category, 
                     mask_compressed["size"][0], 
@@ -332,7 +336,7 @@ class Frame:
         """
         Returns all label records for this frame.
         """
-        return [digit.create_label(mask, self.image_id) for digit, mask in zip(self.digits, self.masks)]
+        return [digit.create_label(mask, self.image_id, self.index) for digit, mask in zip(self.digits, self.masks)]
 
 
     def get_image_labels(self):
@@ -404,7 +408,7 @@ class Sequence():
 
 
 ex = Experiment("moving-mnist")
-ex.add_config("config.yaml")
+ex.add_config("config.yaml")    # Override this with `with my_config.yaml` as argument on command line
 
 @ex.automain
 def main(config):
@@ -425,6 +429,7 @@ def main(config):
         s.write_images()
 
     # Write labels
+    train_or_test = "train" if config['training'] else "test"
     if config['labels']['labeltype'] == "coco":
         image_labels = []
         labels = []
@@ -432,7 +437,6 @@ def main(config):
             image_labels += s.get_image_labels()
             labels += s.get_labels()
 
-        train_or_test = "train" if config['training'] else "test"
         with open(os.path.join(config['dest'], "%s.json" % train_or_test), "w") as f:
             json.dump({"images": image_labels, 
                     "annotations": labels,
@@ -441,4 +445,7 @@ def main(config):
     else:
         for s in sequences:
             s.write_labels()
-
+    
+    # Write copy of config
+    with open(os.path.join(config['dest'], "%s_config.yaml" % train_or_test), 'w') as outfile:
+        yaml.dump(copy.deepcopy(config), outfile, default_flow_style=True)
