@@ -90,8 +90,13 @@ class Digit:
         self.current_size = self.image.size
         
         self.world_width, self.world_height = cfg["shape"]
-        self.position = np.array([np.random.rand() * (self.world_width - self.image.width),
-                                  np.random.rand() * (self.world_height - self.image.height)])
+
+        assert self.world_width - self.image.width > 20, "Shape not considerbly larger than digit image."
+        # Make sure initial position is not too much at the border to not get messed
+        # with increased size and moving direction
+        init_border = int((self.world_width - self.image.width) * .2)
+        self.position = np.array([np.random.rand() * (self.world_width - self.image.width - init_border),
+                                  np.random.rand() * (self.world_height - self.image.height - init_border)])
 
         # Randomly generate direction, speed, velocity, brightness, and size for all images
         self.direction = np.pi * (np.random.rand() * 2 - 1)
@@ -114,6 +119,9 @@ class Digit:
         only chnge the resize factor and apply it every time on the original
         image. Same for brightness.
         """
+        # Adjust size first, might already change the direction
+        self._adjust_size()
+
         x_next, y_next = self.position + self.velocity
 
         # If we hit the border change the direction
@@ -121,12 +129,8 @@ class Digit:
             self.velocity[0] = self.velocity[0] * -1
         elif y_next < self.y_lim[0] or y_next + self.current_size[1] > self.y_lim[1]:
             self.velocity[1] = self.velocity[1] * -1
-        else:
-            pass    # Just a normal move
 
         self.position = self.position + self.velocity
-        
-        self._adjust_size()
 
         self._adjust_brightness()
 
@@ -162,6 +166,7 @@ class Digit:
         Creates a label record for this digit for the current frame.
         """
         mask_compressed = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
+        assert cocotools.area(mask_compressed) > 0, "Trying to write an empty mask"
         if self.label_type == "coco":
             global GLOBAL_label_id
             label_id = GLOBAL_label_id
