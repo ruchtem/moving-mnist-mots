@@ -54,11 +54,12 @@ def get_categories_for_coco():
 
 
 def clean_dir(path):
-    for f in Path(path).iterdir():
-        if f.is_dir():
-            shutil.rmtree(f)
-        else:
-            os.remove(f)
+    if os.path.exists(path):
+        for f in Path(path).iterdir():
+            if f.is_dir():
+                shutil.rmtree(f)
+            else:
+                os.remove(f)
 
 
 class Digit:
@@ -355,13 +356,15 @@ class Frame:
             mask = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
             return cocotools.area(mask) > 0
 
+        # Modify the original list as it is a reference to the one in the sequence
         keep_idx = [i for i, mask in enumerate(self.masks) if mask_valid(mask)]
         for i in reversed(range(len(digits))):
             if i not in keep_idx:
                 del digits[i]
                 del self.masks[i]
 
-        # Copy current state of digits as they could be modified later
+        # Copy current state of digits as the original is a reference
+        # which could be modified elsewhere
         self._digits = copy.deepcopy(digits)
 
 
@@ -400,7 +403,7 @@ class Sequence():
         self.lenght = cfg['num_frames']
         self.label_type = cfg['labels']['labeltype']
         self.out_dir = cfg['dest']
-        self.train = cfg['training']
+        self.name = cfg['name']
 
         if isinstance(cfg['digits_per_image'], list):
             # Digits can enter and leave in this sequence.
@@ -445,9 +448,9 @@ class Sequence():
 
     def write_images(self):
         if self.label_type == "coco":
-            path = os.path.join(self.out_dir, "train" if self.train else "test")
+            path = os.path.join(self.out_dir, self.name)
         else:
-            path = os.path.join(self.out_dir, "images", "%04d" % self.index)
+            path = os.path.join(self.out_dir, self.name, "images", "%04d" % self.index)
         
         if not os.path.exists(path):
             os.makedirs(path)
@@ -458,9 +461,11 @@ class Sequence():
 
     def write_labels(self):
         assert self.label_type == "mots", "Writing label files for each sequence only for MOTS"
-        path = os.path.join(self.out_dir, "%04d.txt" % self.index)
+        path = os.path.join(self.out_dir, self.name)
+        if not os.path.exists(path):
+            os.makedirs(path)
         labels = self.get_labels()
-        with open(path, "w") as f:
+        with open(os.path.join(path, "%04d.txt" % self.index), "w") as f:
             for line in labels:
                 f.write(" ".join(str(x) for x in line) + "\n")
 
@@ -470,7 +475,8 @@ ex = Experiment("moving-mnist")
 @ex.automain
 def main(config):
     np.random.seed(config["seed"])
-    clean_dir(config['dest'])
+    name = config['name']
+    clean_dir(os.path.join(config['dest'], name))
 
     # Assumtion throughout the code that labeltye is mots if it isn't coco
     assert config['labels']['labeltype'] in ["coco", "mots"], \
@@ -486,7 +492,6 @@ def main(config):
         s.write_images()
 
     # Write labels
-    train_or_test = "train" if config['training'] else "test"
     if config['labels']['labeltype'] == "coco":
         image_labels = []
         labels = []
@@ -494,7 +499,7 @@ def main(config):
             image_labels += s.get_image_labels()
             labels += s.get_labels()
 
-        with open(os.path.join(config['dest'], "%s.json" % train_or_test), "w") as f:
+        with open(os.path.join(config['dest'], "%s.json" % name), "w") as f:
             json.dump({"images": image_labels, 
                     "annotations": labels,
                     "categories": get_categories_for_coco()}, f)
@@ -504,5 +509,5 @@ def main(config):
             s.write_labels()
     
     # Write copy of config
-    with open(os.path.join(config['dest'], "%s_config.yaml" % train_or_test), 'w') as outfile:
+    with open(os.path.join(config['dest'], name, "%s_config.yaml" % name), 'w') as outfile:
         yaml.dump(copy.deepcopy(config), outfile, default_flow_style=True)

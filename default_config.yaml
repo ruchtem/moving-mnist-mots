@@ -33,6 +33,9 @@ config:
   # Where to store the output
   dest: "./out"
 
+  # Files/folder naming. Can be used to denote train, validation and test set.
+  name: "train"
+
   # Filetype for the generated image data: currently only "jpg"
   filetype: "jpg"
 
