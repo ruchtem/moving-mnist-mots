@@ -6,16 +6,29 @@ config:
   shape: [60, 50]
 
   # Number of frames in a particular movement/animation/gif
-  num_frames: 10
+  num_frames: 20
 
   # Number of movement/animations/gifs/sequences to generate
   num_sequences: 20
 
-  # Digits per movement/animation/gif/sequence.
-  digits_per_image: 4
+  # Digits per movement/animation/gif/sequence. If it is a single number than
+  # no digit is leaving or entering. If it is a tuple, digits can leave and
+  # new digits can enter the area whereby the first number defines the lower bound
+  # and the second number the upper bound on the number of digits per frame.
+  # e.g. 4 or [3, 5], so have 3 to 5 images in each frame.
+  # Note that there can be empty images if lower bound is set to 1.
+  digits_per_image: [2, 3]
+
+  # Probability that a digit is leaving the image when hit the border.
+  # Only valid when digits_per_image is a list
+  leave_probability: 0.5
+
+  # Probability that a new digits enters if there are less digits in a frame than allowed.
+  # This is a probability on per frame basis
+  enter_probability: 0.1
 
   # Boolean, used to decide if downloading/generating train set or test set
-  training: False
+  training: True
 
   # Where to store the output
   dest: "./out"

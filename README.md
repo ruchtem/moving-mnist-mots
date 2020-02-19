@@ -2,18 +2,18 @@
 
 **This is work in progress!!**
 
-This is an extension of the moving MNIST dataset by [1] based on the implementation by [praateekmahajan](https://gist.github.com/praateekmahajan/b42ef0d295f528c986e2b3a0b31ec1fe) (thank you!).
+This is an extension of the moving MNIST dataset by [1] based on the implementation by [praateekmahajan](https://gist.github.com/praateekmahajan/b42ef0d295f528c986e2b3a0b31ec1fe) but heavily reengieneered.
 
 It is tailored towards the Multi-Object Tracking and Segmentation (MOTS) task introduced by [2].
 
 This includes the following modifications:
 
-- Numbers have a fixed order with regard to foreground to background
+- Numbers have a fixed order with regard to foreground to background. This means foreground numbers might cover parts of backround numbers
 - Numbers change their size while moving
 - Numbers change their appearance while moving
-- (todo) Numbers can disappear in a sequence and new numbers can enter
+- Numbers can disappear in a sequence and new numbers can enter
 
-The generated data can be exported in COCO format [3] or MOTS format [2].
+The generated data can be exported in COCO [3] or MOTS format [2].
 
 
 # Installation
@@ -27,7 +27,7 @@ pip install pycocotools
 
 # Configuration
 
-The configuration is controlled by `sacred`. For options see [config.yaml](config.yaml).
+The configuration is controlled by `sacred`. For options see [default_config.yaml](default_config.yaml).
 
 # Generate data
 
@@ -35,6 +35,16 @@ The configuration is controlled by `sacred`. For options see [config.yaml](confi
 mkdir out
 python3 moving_mnist.py
 ```
+
+This takes the defaults defined in [default_config.yaml](default_config.yaml).
+
+Alternatively, you can pass another configuration using the command line. This will override all parameters you specify in there and take the defaults for the others.
+
+```
+python3 moving_mnist.py with /path/to/config.yaml
+```
+
+
 
 # References
 

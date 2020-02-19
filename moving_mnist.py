@@ -84,7 +84,9 @@ class Digit:
         self.brightness_band = cfg['brightness_band']
         self.size_change = cfg['size_change']
         self.brightness_change = cfg['brightness_change']
+        self.leave_prob = cfg['leave_probability']
 
+        self._is_leaving = False
         self.image, self.category = Digit.load_random_image(self.train)
 
         self.current_size = self.image.size
@@ -124,11 +126,19 @@ class Digit:
 
         x_next, y_next = self.position + self.velocity
 
-        # If we hit the border change the direction
-        if x_next < self.x_lim[0] or x_next + self.current_size[0] > self.x_lim[1]:
-            self.velocity[0] = self.velocity[0] * -1
-        elif y_next < self.y_lim[0] or y_next + self.current_size[1] > self.y_lim[1]:
-            self.velocity[1] = self.velocity[1] * -1
+        if not self._is_leaving:
+            # If we hit the border change the direction
+            if x_next < self.x_lim[0] or x_next + self.current_size[0] > self.x_lim[1]:
+                if np.random.rand() < self.leave_prob:
+                    self._is_leaving = True
+                else:
+                    # We dont leave
+                    self.velocity[0] = self.velocity[0] * -1
+            elif y_next < self.y_lim[0] or y_next + self.current_size[1] > self.y_lim[1]:
+                if np.random.rand() < self.leave_prob:
+                    self._is_leaving = True
+                else:
+                    self.velocity[1] = self.velocity[1] * -1
 
         self.position = self.position + self.velocity
 
@@ -309,12 +319,16 @@ class Frame:
         """
         Besides initialization also moves and draws the digits onto the
         frame image.
+
+        Note that `digits` are modified by this class!
+
         """
-        self.digits = digits
         self.index = index
         self.train = cfg['training']
         self.shape = cfg['shape']   # width, height
         self.label_type = cfg['labels']['labeltype']
+        self.digits_per_image = cfg['digits_per_image']
+        self.enter_prob = cfg['enter_probability']
 
         self.image = Image.new("L", self.shape)
 
@@ -322,11 +336,11 @@ class Frame:
         self.image_id = GLOBAL_image_id
         GLOBAL_image_id += 1
         
-        for digit in self.digits:
+        for digit in digits:
             digit.move()
 
         self.masks = []
-        for digit in self.digits:
+        for digit in digits:
             # First is the most background
             mask = digit.draw_and_mask(self)
 
@@ -335,13 +349,27 @@ class Frame:
                 self.masks[j] = ImageMath.eval("a & ~b", a = self.masks[j], b=mask)
             
             self.masks.append(mask)
-    
+        
+        # Handle leaving digits/empty masks
+        def mask_valid(mask):
+            mask = cocotools.encode(np.asfortranarray(mask).astype(np.uint8))
+            return cocotools.area(mask) > 0
+
+        keep_idx = [i for i, mask in enumerate(self.masks) if mask_valid(mask)]
+        for i in reversed(range(len(digits))):
+            if i not in keep_idx:
+                del digits[i]
+                del self.masks[i]
+
+        # Copy current state of digits as they could be modified later
+        self._digits = copy.deepcopy(digits)
+
 
     def get_labels(self):
         """
         Returns all label records for this frame.
         """
-        return [digit.create_label(mask, self.image_id, self.index) for digit, mask in zip(self.digits, self.masks)]
+        return [digit.create_label(mask, self.image_id, self.index) for digit, mask in zip(self._digits, self.masks)]
 
 
     def get_image_labels(self):
@@ -374,11 +402,36 @@ class Sequence():
         self.out_dir = cfg['dest']
         self.train = cfg['training']
 
-        self.digits = [Digit(cfg, track_id=i) for i in range(cfg['digits_per_image'])]
+        if isinstance(cfg['digits_per_image'], list):
+            # Digits can enter and leave in this sequence.
+            # Class frame is responsible to make sure we stay inside this boundary
+            num_digits = np.random.randint(low=cfg['digits_per_image'][0], high=cfg['digits_per_image'][1])
+        elif isinstance(cfg['digits_per_image'], int):
+            # We have the same digits per sequence
+            num_digits = cfg['digits_per_image']
+        else:
+            raise AssertionError("Expecting digits_per_image to be int or list, not %s." % type(cfg['digits_per_image']))
+
+        digits = [Digit(cfg, track_id=i) for i in range(num_digits)]
+        last_track_id = num_digits
+        
         self.frames = []
 
         for j in range(self.lenght):
-            self.frames.append(Frame(cfg, self.digits, j))
+            self.frames.append(Frame(cfg, digits, index=j))
+
+            # Handle initialization of new digit
+            if isinstance(cfg['digits_per_image'], list):
+                # Initialize a digit with a certain probability
+                if len(digits) < cfg['digits_per_image'][1] and np.random.rand() < cfg['enter_probability']:
+                    digits.append(Digit(cfg, track_id=last_track_id + 1))
+                    last_track_id += 1
+                
+                # Make sure we have always at least the minimum number of digits
+                if len(digits) < cfg['digits_per_image'][0]:
+                    for i in range(cfg['digits_per_image'][0] - len(digits)):
+                        digits.append(Digit(cfg, track_id=last_track_id + 1))
+                        last_track_id += 1
 
 
     def get_labels(self):
@@ -413,7 +466,7 @@ class Sequence():
 
 
 ex = Experiment("moving-mnist")
-ex.add_config("config.yaml")    # Override this with `with my_config.yaml` as argument on command line
+ex.add_config("default_config.yaml")    # Override this with `with my_config.yaml` as argument on command line
 
 @ex.automain
 def main(config):
