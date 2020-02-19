@@ -84,7 +84,7 @@ class Digit:
         self.brightness_band = cfg['brightness_band']
         self.size_change = cfg['size_change']
         self.brightness_change = cfg['brightness_change']
-        self.leave_prob = cfg['leave_probability']
+        self.leave_prob = cfg['leave_probability'] if isinstance(cfg['digits_per_image'], list) else 0
 
         self._is_leaving = False
         self.image, self.category = Digit.load_random_image(self.train)
@@ -102,7 +102,7 @@ class Digit:
 
         # Randomly generate direction, speed, velocity, brightness, and size for all images
         self.direction = np.pi * (np.random.rand() * 2 - 1)
-        self.speed = np.random.randint(5) + 2
+        self.speed = np.random.randint(3, 5)
         self.velocity = np.array([self.speed * math.cos(self.direction), self.speed * math.sin(self.direction)])
         self.brightness = np.random.uniform(low=self.brightness_band[0], high=self.brightness_band[1])
         self.size = np.random.uniform(low=self.size_band[0], high=self.size_band[1])    # as factor of original size
@@ -466,7 +466,6 @@ class Sequence():
 
 
 ex = Experiment("moving-mnist")
-ex.add_config("default_config.yaml")    # Override this with `with my_config.yaml` as argument on command line
 
 @ex.automain
 def main(config):

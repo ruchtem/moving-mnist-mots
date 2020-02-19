@@ -33,7 +33,7 @@ The configuration is controlled by `sacred`. For options see [default_config.yam
 
 ```
 mkdir out
-python3 moving_mnist.py
+python3 moving_mnist.py with default_config.yaml
 ```
 
 This takes the defaults defined in [default_config.yaml](default_config.yaml).
