@@ -97,9 +97,9 @@ class Digit:
         assert self.world_width - self.image.width > 20, "Shape not considerbly larger than digit image."
         # Make sure initial position is not too much at the border to not get messed
         # with increased size and moving direction
-        init_border = int((self.world_width - self.image.width) * .2)
-        self.position = np.array([np.random.rand() * (self.world_width - self.image.width - init_border),
-                                  np.random.rand() * (self.world_height - self.image.height - init_border)])
+        self.size = np.random.uniform(low=self.size_band[0], high=self.size_band[1])    # as factor of original size
+        self.position = np.array([np.random.rand() * (self.world_width - self.image.width * self.size),
+                                  np.random.rand() * (self.world_height - self.image.height * self.size)])
 
         # Randomly generate direction, speed, velocity, brightness, and size for all images
         self.direction = np.pi * (np.random.rand() * 2 - 1)
@@ -470,11 +470,36 @@ class Sequence():
                 f.write(" ".join(str(x) for x in line) + "\n")
 
 
-ex = Experiment("moving-mnist")
+ex = Experiment("moving mnist for mots")
+
+@ex.config
+def cfg():
+    config = {
+        "seed": None,
+        "shape": [64, 64],
+        "num_frames": 40,
+        "num_sequences": 20,
+        "digits_per_image": [2, 3],
+        "leave_probability": 0.4,
+        "enter_probability": 0.1,
+        "training": True,
+        "dest": "./out",
+        "name": "train",
+        "filetype": "jpg",
+        "labels": {
+            "labeltype": "mots",
+            "masktype": "rle"},
+        "size_band": [0.7, 1.3],
+        "size_change": 0.05,
+        "brightness_band": [0.2, 1],
+        "brightness_change": 0.05,
+        "seg_threshold": 50
+    }
 
 @ex.automain
 def main(config):
-    np.random.seed(config["seed"])
+    if config["seed"] is not None:
+        np.random.seed(config["seed"])
     name = config['name']
     clean_dir(os.path.join(config['dest'], name))
 
@@ -509,5 +534,6 @@ def main(config):
             s.write_labels()
     
     # Write copy of config
-    with open(os.path.join(config['dest'], name, "%s_config.yaml" % name), 'w') as outfile:
+    path = os.path.join(config['dest'],"%s_config.yaml" % name) if config['labels']['labeltype'] == "coco" else os.path.join(config['dest'], name, "%s_config.yaml" % name)
+    with open(path, 'w') as outfile:
         yaml.dump(copy.deepcopy(config), outfile, default_flow_style=True)
