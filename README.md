@@ -1,7 +1,5 @@
 # Toy dataset based on moving MNIST to evaluate models for Multi-Object Tracking and Segmentation
 
-**This is work in progress!!**
-
 This is an extension of the moving MNIST dataset by [1] based on the implementation by [praateekmahajan](https://gist.github.com/praateekmahajan/b42ef0d295f528c986e2b3a0b31ec1fe) but heavily reengieneered.
 
 It is tailored towards the Multi-Object Tracking and Segmentation (MOTS) task introduced by [2].
@@ -18,11 +16,12 @@ The generated data can be exported in COCO [3] or MOTS format [2].
 
 # Installation
 
+Requires `python3.8`.
+
 ```
 python3 -m venv path/to/venvs/moving-mnist-mots         # Create a virtual environment
 source path/to/venvs/moving-mnist-mots/bin/activate     # Activate the virtual environment
 pip install -r requirements.txt
-pip install pycocotools
 ```
 
 # Configuration
